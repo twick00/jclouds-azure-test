@@ -12,7 +12,6 @@ import org.jclouds.ContextBuilder;
 import org.jclouds.azure.storage.AzureStorageResponseException;
 import org.jclouds.blobstore.BlobStore;
 import org.jclouds.blobstore.BlobStoreContext;
-import org.jclouds.blobstore.domain.BlobAccess;
 import org.jclouds.blobstore.domain.MultipartPart;
 import org.jclouds.blobstore.domain.MultipartUpload;
 import org.jclouds.blobstore.options.PutOptions;
@@ -29,20 +28,19 @@ public class Main {
   static String blobName = ".txt";
   static int numParts = 300;
 
-
   public static void main(String[] args) throws IOException {
     BlobStoreContext context = ContextBuilder.newBuilder("azureblob")
         .endpoint(endpoint)
         .credentials(storageAccountName, storageAccountKey)
         .buildView(BlobStoreContext.class);
 
-// Access the BlobStore
+    // Access the BlobStore
     BlobStore blobStore = context.getBlobStore();
 
-// Create a Container
+    // Create a Container
     blobStore.createContainerInLocation(null, containerName);
 
-// Create a blob. 
+    // Create a blob. 
     ByteSource byteSource = Files.asByteSource(new File(blobFullyQualifiedFileName));
 
     byte[] fileBytes = byteSource.read();
@@ -62,32 +60,56 @@ public class Main {
     MultipartUpload multipartUpload = blobStore.initiateMultipartUpload(
         containerName,
         blobStore.blobBuilder(blobName).build().getMetadata(),
-        new PutOptions().setBlobAccess(BlobAccess.PRIVATE)
+        new PutOptions()
     );
 
-    // For each part, upload it to the blobstore
-    for (int i = 0; i < parts.size(); i++) {
-      if (i % 10 == 0) {
-        System.out.println("Uploaded " + i + " parts");
-      }
-      MultipartUpload mpu = MultipartUpload.create(
-          containerName,
-          blobName,
-          multipartUpload.id(),
-          multipartUpload.blobMetadata(),
-          multipartUpload.putOptions()
-      );
-
-      Payload payload = Payloads.newStringPayload(parts.get(i));
-      try {
-        blobStore.uploadMultipartPart(mpu, i, payload);
-      } catch (AzureStorageResponseException e) {
-        System.out.println("Error uploading part " + i);
-        blobStore.abortMultipartUpload(mpu);
-        e.printStackTrace();
-        System.exit(1);
-      } 
+    // Upload the first failing part
+    int firstFailingPart = 248; // Correlates to 'AAAA-A=='
+    MultipartUpload mpu = MultipartUpload.create(
+        containerName,
+        blobName,
+        multipartUpload.id(),
+        multipartUpload.blobMetadata(),
+        multipartUpload.putOptions()
+    );
+    Payload payload = Payloads.newStringPayload(parts.get(firstFailingPart));
+    try {
+      blobStore.uploadMultipartPart(mpu, firstFailingPart, payload);
+    } catch (AzureStorageResponseException e) {
+      System.out.println("Error uploading part " + firstFailingPart);
+      blobStore.abortMultipartUpload(mpu);
+      e.printStackTrace();
+      System.exit(1);
     }
+
+    /**
+     * There are two ways to test this; one is to use the commented code below, and the other is to use the code above.
+     * The code above shows that specific part numbers will always fail, while the code below simply uploads all parts and fails near the end
+     */
+
+//    // For each part, upload it to the blobstore
+//    for (int i = 0; i < parts.size(); i++) {
+//      if (i % 10 == 0) {
+//        System.out.println("Uploaded " + i + " parts");
+//      }
+//      MultipartUpload mpu = MultipartUpload.create(
+//          containerName,
+//          blobName,
+//          multipartUpload.id(),
+//          multipartUpload.blobMetadata(),
+//          multipartUpload.putOptions()
+//      );
+//
+//      Payload payload = Payloads.newStringPayload(parts.get(i));
+//      try {
+//        blobStore.uploadMultipartPart(mpu, i, payload);
+//      } catch (AzureStorageResponseException e) {
+//        System.out.println("Error uploading part " + i);
+//        blobStore.abortMultipartUpload(mpu);
+//        e.printStackTrace();
+//        System.exit(1);
+//      }
+//    }
 
     List<MultipartPart> multipartParts = blobStore.listMultipartUpload(multipartUpload);
 
