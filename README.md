@@ -1,4 +1,4 @@
-## Minimum example of Azure Blob Storage failing when using `-` and `_` in the 
+## Minimum example of Azure Blob Storage failing blockId is `-` or `_`.
 
 To run, update the following variables based on your Azure Storage Account:
 ```
